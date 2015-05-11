@@ -18,17 +18,23 @@ namespace Force.AthWebClient.TcpWrappers
 			_client = new TcpClient();
 		}
 
-		public void Connect(string host, int port, TimeSpan connectTimeout, TimeSpan sendTimeout, TimeSpan receiveTimeout)
+		public void Connect(AthEndPoint endpoint, TimeSpan connectTimeout, TimeSpan sendTimeout, TimeSpan receiveTimeout)
 		{
 			CheckDisposed();
 
 			_client.SendTimeout = (int)sendTimeout.TotalMilliseconds;
 			_client.ReceiveTimeout = (int)receiveTimeout.TotalMilliseconds;
 
-			if (connectTimeout == TimeSpan.Zero) _client.Connect(host, port);
+			if (connectTimeout == TimeSpan.Zero)
+			{
+				if (endpoint.IsHostIpAddress)
+					_client.Connect(endpoint.Address, endpoint.Port);
+				else
+					_client.Connect(endpoint.Host, endpoint.Port);
+			}
 			else
 			{
-				var task = ConnectAsync(host, port, sendTimeout, receiveTimeout);
+				var task = ConnectAsync(endpoint, sendTimeout, receiveTimeout);
 				if (!task.Wait(connectTimeout))
 				{
 					ErrorClose();
@@ -37,14 +43,18 @@ namespace Force.AthWebClient.TcpWrappers
 			}
 		}
 
-		public Task ConnectAsync(string host, int port, TimeSpan sendTimeout, TimeSpan receiveTimeout)
+		public Task ConnectAsync(AthEndPoint endpoint, TimeSpan sendTimeout, TimeSpan receiveTimeout)
 		{
 			CheckDisposed();
 
 			_client.SendTimeout = (int)sendTimeout.TotalMilliseconds;
 			_client.ReceiveTimeout = (int)receiveTimeout.TotalMilliseconds;
 
-			return Task.Factory.FromAsync(_client.BeginConnect, _client.EndConnect, host, port, null);
+
+			if (!endpoint.IsHostIpAddress)
+				return Task.Factory.FromAsync(_client.BeginConnect, _client.EndConnect, endpoint.Host, endpoint.Port, null);
+			else
+				return Task.Factory.FromAsync(_client.BeginConnect, _client.EndConnect, endpoint.Address, endpoint.Port, null);
 		}
 
 		public Stream CreateStream(Func<Stream, Stream> wrapper)

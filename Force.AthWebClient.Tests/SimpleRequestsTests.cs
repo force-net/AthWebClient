@@ -60,6 +60,8 @@ namespace Force.AthWebClient.Tests
 		public void Google_Https_Request_Should_Return_Ok()
 		{
 			var r = new AthWebRequest("https://google.com/");
+			var isValidated = false;
+			r.SslOptions.ServerCertificateValidationCallback += (sender, certificate, chain, errors) => isValidated = true;
 			var response = r.GetResponse();
 			var ssl = r.SslConnectionInfo;
 			Console.WriteLine("CheckCertRevocationStatus: " + ssl.CheckCertRevocationStatus);
@@ -74,6 +76,7 @@ namespace Force.AthWebClient.Tests
 			Console.WriteLine("IsSigned: " + ssl.IsSigned);
 			Console.WriteLine("Certificate: " + ssl.ServerCertificate.Subject);
 
+			Assert.That(isValidated, Is.True);
 			Console.WriteLine(response.StatusCode);
 			Assert.That(response.StatusCode, Is.EqualTo(200).Or.EqualTo(302));
 

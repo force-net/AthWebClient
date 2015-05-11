@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Net;
 using System.Net.Security;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
@@ -38,7 +39,7 @@ namespace Force.AthWebClient
 
 		private readonly ITcpStreamWrapper _client;
 
-		private readonly Uri _url;
+		private readonly AthEndPoint _connectEndPoint;
 
 		private readonly List<Tuple<string, string>> _headers = new List<Tuple<string, string>>();
 
@@ -77,21 +78,30 @@ namespace Force.AthWebClient
 
 		public TimeSpan ReceiveTimeout { get; set; }
 
-		public AthWebRequest(Uri url)
+		public AthWebRequest(string url)
+			: this(AthEndPoint.FromUrl(url))
+		{
+		}
+
+		public AthWebRequest(Uri url) 
+			: this(AthEndPoint.FromUrl(url))
+		{
+		}
+
+		public AthWebRequest(string scheme, EndPoint endPoint, string pathAndQuery)
+			: this(AthEndPoint.FromEndPoint(scheme, endPoint, pathAndQuery))
+		{
+		}
+
+		public AthWebRequest(AthEndPoint endPoint)
 		{
 			HttpVersion = HttpProtocolVersion.Http11;
 			Method = "GET";
 
-			if (url.Scheme != "http" && url.Scheme != "https")
-				throw new NotSupportedException("Only http(s) scheme supported now");
-
-			_url = url;
+			_connectEndPoint = endPoint;
 			_client = new SimpleTcpStreamWrapper();
-			if (url.Scheme == "https") SslOptions = SslOptions.CreateDefault();
-		}
-
-		public AthWebRequest(string url) : this(new Uri(url))
-		{
+			if (_connectEndPoint.Scheme == AthEndPoint.SchemeType.Https) 
+				SslOptions = SslOptions.CreateDefault();
 		}
 
 		public void AddHeader(string headerName, string value)
@@ -126,7 +136,7 @@ namespace Force.AthWebClient
 
 		private Stream ProcessWrapStreamInternal(Stream stream)
 		{
-			if (_url.Scheme == "https")
+			if (_connectEndPoint.Scheme == AthEndPoint.SchemeType.Https)
 			{
 				var sslStream = new SslStream(
 					stream,
@@ -151,7 +161,11 @@ namespace Force.AthWebClient
 					SslOptions.EncryptionPolicy);
 				// TODO: host from headers
 				var clientCertificates = SslOptions.ClientCertificate == null ? null : new X509CertificateCollection(new[] { SslOptions.ClientCertificate });
-				sslStream.AuthenticateAsClient(_url.Host, clientCertificates, (SslProtocols)SslOptions.AllowedProtocols, SslOptions.CheckRevocation);
+
+				// set target host, only if by host name, and not by ip
+				string targetHost = _connectEndPoint.IsHostIpAddress ? string.Empty : _connectEndPoint.Host;
+
+				sslStream.AuthenticateAsClient(targetHost, clientCertificates, (SslProtocols)SslOptions.AllowedProtocols, SslOptions.CheckRevocation);
 				SslConnectionInfo = new SslConnectionInfo(sslStream);
 
 				return sslStream;
@@ -170,7 +184,7 @@ namespace Force.AthWebClient
 			if (_client.GetStream() != null)
 				ThrowError("Already connected");
 
-			_client.Connect(_url.Host, _url.Port, ConnectTimeout, SendTimeout, ReceiveTimeout);
+			_client.Connect(_connectEndPoint, ConnectTimeout, SendTimeout, ReceiveTimeout);
 			ProcessGetStreamInternal();
 		}
 
@@ -179,7 +193,7 @@ namespace Force.AthWebClient
 			if (_client.GetStream() != null)
 				ThrowError("Already connected");
 
-			return _client.ConnectAsync(_url.Host, _url.Port, SendTimeout, ReceiveTimeout)
+			return _client.ConnectAsync(_connectEndPoint, SendTimeout, ReceiveTimeout)
 				.ContinueWith(_ => ProcessGetStreamInternal());
 		}
 
@@ -189,9 +203,9 @@ namespace Force.AthWebClient
 				// NO Using or Close!! We use StreamWriter as simple wrapper for strings writing
 				var writer = new StreamWriter(_client.GetStream(), Encoding.ASCII, 65536);
 				var versionString = HttpVersion == HttpProtocolVersion.Http10 ? "1.0" : "1.1";
-				writer.WriteLine((Method ?? "GET").ToUpperInvariant() + " " + _url.PathAndQuery + " " + "HTTP/" + versionString);
+				writer.WriteLine((Method ?? "GET").ToUpperInvariant() + " " + _connectEndPoint.GetPathAndQueryEscaped() + " " + "HTTP/" + versionString);
 				if (!_isHostSet)
-					writer.WriteLine("Host: " + _url.Host + (_url.IsDefaultPort ? string.Empty : ":" + _url.Port));
+					writer.WriteLine("Host: " + _connectEndPoint.Host + (_connectEndPoint.IsDefaultPort ? string.Empty : ":" + _connectEndPoint.Port));
 				writer.WriteLine("Connection: close");
 				if (!_contentLengthSetByHeaders)
 				{

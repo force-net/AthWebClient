@@ -39,6 +39,7 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AthEndPoint.cs" />
     <Compile Include="Ssl\AthExchangeAlgorithmType.cs" />
     <Compile Include="Ssl\AthHashAlgorithmType.cs" />
     <Compile Include="Ssl\AthSslProtocols.cs" />
