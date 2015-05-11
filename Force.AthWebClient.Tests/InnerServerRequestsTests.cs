@@ -1,5 +1,7 @@
 ﻿using System;
+using System.IO;
 using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -119,6 +121,88 @@ namespace Force.AthWebClient.Tests
 
 				Console.WriteLine(response.StatusCode);
 				Assert.That(response.StatusCode, Is.EqualTo(200));
+			}
+		}
+
+		[Test]
+		public void Invalid_Server_Should_Cause_Normal_Exception()
+		{
+			var r = new AthWebRequest("http://localhost:44557");
+			Assert.Throws<SocketException>(() => r.GetResponse());
+		}
+
+		[Test]
+		public void Read_Timeout_Should_Throw()
+		{
+			HttpListener listener = null;
+			var endEvt = new AutoResetEvent(false);
+			var thread = new Thread(() =>
+				{
+					listener = new HttpListener();
+					listener.Prefixes.Add(SERVER_URL);
+					listener.Start();
+					// no get context!!
+					endEvt.WaitOne(TimeSpan.FromSeconds(10));
+				});
+			thread.Start();
+			var r = new AthWebRequest(SERVER_URL);
+			r.ReceiveTimeout = TimeSpan.FromSeconds(1);
+			try
+			{
+				Assert.Throws<IOException>(() => r.GetResponse());
+			}
+			finally 
+			{
+				if (listener != null)
+					listener.Abort();
+				endEvt.Set();
+				thread.Join(TimeSpan.FromSeconds(1));
+				thread.Abort();
+			}
+		}
+
+		[Test]
+		public void Send_Timeout_Should_Throw()
+		{
+			HttpListener listener = null;
+			var endEvt = new AutoResetEvent(false);
+			var thread = new Thread(() =>
+			{
+				listener = new HttpListener();
+				listener.Prefixes.Add(SERVER_URL);
+				listener.Start();
+				listener.GetContext();
+				// no read!!
+				endEvt.WaitOne(TimeSpan.FromSeconds(10));
+			});
+			thread.Start();
+			var r = new AthWebRequest(SERVER_URL);
+			r.Method = "POST";
+			r.SendTimeout = TimeSpan.FromSeconds(1);
+			try
+			{
+				var stream = r.GetRequestStream();
+				Assert.Throws<IOException>(() =>
+					{
+						var buf = new byte[65536];
+						// ensuring, data not in local cache
+						stream.Write(buf, 0, buf.Length);
+						stream.Write(buf, 0, buf.Length);
+						stream.Write(buf, 0, buf.Length);
+						stream.Write(buf, 0, buf.Length);
+						stream.Write(buf, 0, buf.Length);
+						stream.Write(buf, 0, buf.Length);
+						stream.Write(buf, 0, buf.Length);
+						stream.Write(buf, 0, buf.Length);
+					});
+			}
+			finally
+			{
+				if (listener != null)
+					listener.Abort();
+				endEvt.Set();
+				thread.Join(TimeSpan.FromSeconds(1));
+				thread.Abort();
 			}
 		}
 	}

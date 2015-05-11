@@ -27,14 +27,15 @@ Due this situation, I decide to realize own dumb Http Client with simple, but co
 * Chunking support for request/response
 * HTTPS support with security configuration and connection information
 * Support of automatic decompression of GZip/Defalte response (if requested)
+* Timeouts for Connect, Send, Receive
 
 ## TODO
 * KeepAlive suport
 * Limit request number to server
 * Proxy support (with autentication)
 * Authentication support
-* Timeouts configuration
-* Request cancelling
+* Timeouts configuration (better support)
+* Request cancelling (better support)
 * Api improvements (better support of standard headers)
 * Automatic Redirects
 * Expect 100 Continue

@@ -3,16 +3,18 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Net.Sockets;
 using System.Text;
 
 using Force.AthWebClient.Streams;
+using Force.AthWebClient.TcpWrappers;
 
 namespace Force.AthWebClient
 {
 	public class AthWebResponse
 	{
 		private readonly NetworkReadStream _stream;
+
+		private readonly ITcpStreamWrapper _client;
 
 		private Stream _responseStream;
 
@@ -32,7 +34,7 @@ namespace Force.AthWebClient
 			set
 			{
 				if (_responseStream != null)
-					throw new InvalidOperationException("ResponseStream already retrieved.");
+					ThrowError("ResponseStream already retrieved.");
 				_autoDecompressResponse = value;
 			}
 		}
@@ -45,9 +47,10 @@ namespace Force.AthWebClient
 			}
 		}
 
-		internal AthWebResponse(TcpClient client, Stream stream)
+		internal AthWebResponse(ITcpStreamWrapper client)
 		{
-			_stream = new NetworkReadStream(client, stream);
+			_client = client;
+			_stream = new NetworkReadStream(client);
 		}
 
 		internal void ReadHeaders()
@@ -85,15 +88,15 @@ namespace Force.AthWebClient
 			var r = _stream.ReadString(256);
 
 			if (!r.Item1)
-				throw new InvalidOperationException("Incorrect http answer");
+				ThrowError("Incorrect http answer");
 
 			string line = r.Item2;
 			if (!line.StartsWith("HTTP/"))
-				throw new InvalidOperationException("Non-http response");
+				ThrowError("Non-http response");
 
 			var idxSp1 = line.IndexOf(' ');
 			if (idxSp1 < 0)
-				throw new InvalidOperationException("Incorrect http answer");
+				ThrowError("Incorrect http answer");
 
 			var b = new StringBuilder();
 			for (var i = idxSp1 + 1; i < line.Length; i++)
@@ -105,7 +108,7 @@ namespace Force.AthWebClient
 			}
 
 			if (b.Length != 3)
-				throw new InvalidOperationException("Incorrect http answer");
+				ThrowError("Incorrect http answer");
 
 			// ok, we already have 3 digits
 			StatusCode = Convert.ToInt32(b.ToString());
@@ -117,7 +120,7 @@ namespace Force.AthWebClient
 			{
 				var res = _stream.ReadString(65536);
 				if (!res.Item1)
-					throw new InvalidOperationException("Very big header");
+					ThrowError("Very big header");
 				var header = res.Item2;
 
 				if (header.Length == 0) return;
@@ -125,9 +128,15 @@ namespace Force.AthWebClient
 				var idx = header.IndexOf(':');
 
 				if (idx < 0)
-					throw new InvalidOperationException("Invalid response header: " + header);
+					ThrowError("Invalid response header: " + header);
 				_headers.Add(new Tuple<string, string>(header.Substring(0, idx), header.Remove(0, idx + 1).Trim()));
 			}
+		}
+
+		private void ThrowError(string text)
+		{
+			_client.ErrorClose();
+			throw new InvalidOperationException(text);
 		}
 	}
 }

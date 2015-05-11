@@ -54,6 +54,8 @@
     <Compile Include="AthWebResponse.cs" />
     <Compile Include="Streams\ResponseStream.cs" />
     <Compile Include="Stubs\WriteStubStream.cs" />
+    <Compile Include="TcpWrappers\ITcpStreamWrapper.cs" />
+    <Compile Include="TcpWrappers\SimpleTcpStreamWrapper.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

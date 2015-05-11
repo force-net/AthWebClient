@@ -1,15 +1,15 @@
 ﻿using System;
 using System.IO;
-using System.Net.Sockets;
 using System.Text;
 
 using Force.AthWebClient.Stubs;
+using Force.AthWebClient.TcpWrappers;
 
 namespace Force.AthWebClient.Streams
 {
 	internal class NetworkReadStream : ReadStubStream
 	{
-		private readonly TcpClient _sourceClient;
+		private readonly ITcpStreamWrapper _sourceClient;
 
 		private readonly Stream _innerStream;
 
@@ -19,10 +19,10 @@ namespace Force.AthWebClient.Streams
 
 		private int _bufferEnd;
 
-		internal NetworkReadStream(TcpClient sourceClient, Stream innerStream)
+		internal NetworkReadStream(ITcpStreamWrapper sourceClient)
 		{
 			_sourceClient = sourceClient;
-			_innerStream = innerStream;
+			_innerStream = sourceClient.GetStream();
 		}
 
 		public override int Read(byte[] buffer, int offset, int count)
@@ -40,15 +40,22 @@ namespace Force.AthWebClient.Streams
 
 		public override void Close()
 		{
-			_innerStream.Close();
-			_sourceClient.Close();
+			_sourceClient.Release();
+		}
+
+		internal void ErrorClose()
+		{
+			_sourceClient.ErrorClose();
 		}
 
 		internal bool ReadSomething()
 		{
 			int toRead = _buffer.Length - _bufferEnd;
 			if (toRead <= 0)
+			{
+				ErrorClose();
 				throw new InvalidOperationException("Buffer underflow");
+			}
 
 			var readed = _innerStream.Read(_buffer, _bufferStart, toRead);
 			if (readed == 0)

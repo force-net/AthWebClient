@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Net.Security;
-using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -12,6 +11,7 @@ using System.Threading.Tasks;
 using Force.AthWebClient.Ssl;
 using Force.AthWebClient.Streams;
 using Force.AthWebClient.Stubs;
+using Force.AthWebClient.TcpWrappers;
 
 // proxy
 // https +
@@ -36,9 +36,7 @@ namespace Force.AthWebClient
 			Http11
 		}
 
-		private readonly TcpClient _client;
-
-		private Stream _stream;
+		private readonly ITcpStreamWrapper _client;
 
 		private readonly Uri _url;
 
@@ -64,7 +62,7 @@ namespace Force.AthWebClient
 			set
 			{
 				if (_contentLengthSetByHeaders)
-					throw new InvalidOperationException("Content-Length already set by headers");
+					ThrowError("Content-Length already set by headers");
 				_contentLength = value;
 			}
 		}
@@ -72,6 +70,12 @@ namespace Force.AthWebClient
 		public SslOptions SslOptions { get; private set; }
 
 		public SslConnectionInfo SslConnectionInfo { get; private set; }
+
+		public TimeSpan ConnectTimeout { get; set; }
+
+		public TimeSpan SendTimeout { get; set; }
+
+		public TimeSpan ReceiveTimeout { get; set; }
 
 		public AthWebRequest(Uri url)
 		{
@@ -82,7 +86,7 @@ namespace Force.AthWebClient
 				throw new NotSupportedException("Only http(s) scheme supported now");
 
 			_url = url;
-			_client = new TcpClient();
+			_client = new SimpleTcpStreamWrapper();
 			if (url.Scheme == "https") SslOptions = SslOptions.CreateDefault();
 		}
 
@@ -99,7 +103,7 @@ namespace Force.AthWebClient
 			if (headerName == "Content-Length")
 			{
 				if (_contentLengthSetByHeaders)
-					throw new InvalidOperationException("Content-Length already defined");
+					ThrowError("Content-Length already defined");
 				_contentLengthSetByHeaders = true;
 				_contentLength = Convert.ToInt64(value);
 			}
@@ -107,7 +111,7 @@ namespace Force.AthWebClient
 			if (headerName == "Transfer-Encoding" && value == "chunked")
 			{
 				if (_contentLengthSetByHeaders)
-					throw new InvalidOperationException("Content-Length already defined");
+					ThrowError("Content-Length already defined");
 				_contentLengthSetByHeaders = true;
 				_contentLength = null;
 			}
@@ -117,11 +121,15 @@ namespace Force.AthWebClient
 
 		private void ProcessGetStreamInternal()
 		{
-			_stream = _client.GetStream();
+			_client.CreateStream(ProcessWrapStreamInternal);
+		}
+
+		private Stream ProcessWrapStreamInternal(Stream stream)
+		{
 			if (_url.Scheme == "https")
 			{
 				var sslStream = new SslStream(
-					_stream,
+					stream,
 					false,
 					(sender, certificate, chain, errors) =>
 					{
@@ -141,11 +149,17 @@ namespace Force.AthWebClient
 					},
 					null,
 					SslOptions.EncryptionPolicy);
-				_stream = sslStream;
 				// TODO: host from headers
 				var clientCertificates = SslOptions.ClientCertificate == null ? null : new X509CertificateCollection(new[] { SslOptions.ClientCertificate });
 				sslStream.AuthenticateAsClient(_url.Host, clientCertificates, (SslProtocols)SslOptions.AllowedProtocols, SslOptions.CheckRevocation);
 				SslConnectionInfo = new SslConnectionInfo(sslStream);
+
+				return sslStream;
+			}
+			else
+			{
+				// http, does not modify
+				return stream;
 			}
 
 			// TODO: async version
@@ -153,18 +167,19 @@ namespace Force.AthWebClient
 
 		private void DoConnect()
 		{
-			if (_stream != null)
-				throw new InvalidOperationException("Already connected");
-			_client.Connect(_url.Host, _url.Port);
+			if (_client.GetStream() != null)
+				ThrowError("Already connected");
+
+			_client.Connect(_url.Host, _url.Port, ConnectTimeout, SendTimeout, ReceiveTimeout);
 			ProcessGetStreamInternal();
 		}
 
 		private Task DoConnectAsync()
 		{
-			if (_stream != null)
-				throw new InvalidOperationException("Already connected");
+			if (_client.GetStream() != null)
+				ThrowError("Already connected");
 
-			return Task.Factory.FromAsync(_client.BeginConnect, _client.EndConnect, _url.Host, _url.Port, null)
+			return _client.ConnectAsync(_url.Host, _url.Port, SendTimeout, ReceiveTimeout)
 				.ContinueWith(_ => ProcessGetStreamInternal());
 		}
 
@@ -172,7 +187,7 @@ namespace Force.AthWebClient
 		{
 			{
 				// NO Using or Close!! We use StreamWriter as simple wrapper for strings writing
-				var writer = new StreamWriter(_stream, Encoding.ASCII, 65536);
+				var writer = new StreamWriter(_client.GetStream(), Encoding.ASCII, 65536);
 				var versionString = HttpVersion == HttpProtocolVersion.Http10 ? "1.0" : "1.1";
 				writer.WriteLine((Method ?? "GET").ToUpperInvariant() + " " + _url.PathAndQuery + " " + "HTTP/" + versionString);
 				if (!_isHostSet)
@@ -204,10 +219,10 @@ namespace Force.AthWebClient
 
 		private Stream CreateRequestStreamInternal()
 		{
-			if (_contentLength == null) 
-				return _requestStream = new ChunkedRequestStream(_stream);
-			else 
-				return _requestStream = new RequestStream(_stream, _contentLength);
+			if (_contentLength == null)
+				return _requestStream = new ChunkedRequestStream(_client.GetStream());
+			else
+				return _requestStream = new RequestStream(_client, _client.GetStream(), _contentLength);
 		}
 
 		public Stream GetRequestStream()
@@ -237,7 +252,7 @@ namespace Force.AthWebClient
 
 			_requestStream.Close();
 
-			var response = new AthWebResponse(_client, _stream);
+			var response = new AthWebResponse(_client);
 			response.ReadHeaders();
 			return response;
 		}
@@ -249,8 +264,13 @@ namespace Force.AthWebClient
 
 		public void Abort()
 		{
-			_stream.Close();
-			//_client.Close();
+			_client.ErrorClose();
+		}
+
+		private void ThrowError(string text)
+		{
+			_client.ErrorClose();
+			throw new InvalidOperationException(text);
 		}
 	}
 }

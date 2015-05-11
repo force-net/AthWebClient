@@ -1,0 +1,21 @@
+﻿using System;
+using System.IO;
+using System.Threading.Tasks;
+
+namespace Force.AthWebClient.TcpWrappers
+{
+	public interface ITcpStreamWrapper
+	{
+		void Connect(string host, int port, TimeSpan connectTimeout, TimeSpan sendTimeout, TimeSpan receiveTimeout);
+
+		Task ConnectAsync(string host, int port, TimeSpan sendTimeout, TimeSpan receiveTimeout);
+
+		Stream CreateStream(Func<Stream, Stream> wrapper);
+
+		Stream GetStream();
+
+		void Release();
+
+		void ErrorClose();
+	}
+}

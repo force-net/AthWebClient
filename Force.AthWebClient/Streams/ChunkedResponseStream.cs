@@ -37,7 +37,7 @@ namespace Force.AthWebClient.Streams
 				{
 					var emptyLine = _innerStream.ReadString(2);
 					if (!emptyLine.Item1 || emptyLine.Item2.Length > 0)
-						throw new InvalidOperationException("Invalid line separator: " + emptyLine.Item2);
+						ThrowError("Invalid line separator: " + emptyLine.Item2);
 				}
 
 				var str = _innerStream.ReadString(16);
@@ -45,13 +45,13 @@ namespace Force.AthWebClient.Streams
 				if (!str.Item1)
 					throw new InvalidOperationException("Invalid chunk");
 				if (!long.TryParse(str.Item2, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out _chunkSize))
-					throw new InvalidOperationException("Invalid chunk: " + str.Item2);
+					ThrowError("Invalid chunk: " + str.Item2);
 				// final chunk
 				if (_chunkSize == 0)
 				{
 					var emptyLine = _innerStream.ReadString(2);
 					if (!emptyLine.Item1 || emptyLine.Item2.Length > 0)
-						throw new InvalidOperationException("Invalid final chunk: " + emptyLine.Item2);
+						ThrowError("Invalid final chunk: " + emptyLine.Item2);
 					_isFullyRead = true;
 				}
 
@@ -64,6 +64,12 @@ namespace Force.AthWebClient.Streams
 		public override void Close()
 		{
 			_innerStream.Close();
+		}
+
+		private void ThrowError(string text)
+		{
+			_innerStream.ErrorClose();
+			throw new InvalidOperationException(text);
 		}
 	}
 }
