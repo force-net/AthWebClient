@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace Force.AthWebClient.TcpWrappers
 {
-	public class SimpleTcpStreamWrapper : ITcpStreamWrapper
+	public class SimpleTcpStreamWrapper : ITcpStreamWrapper, IDisposable
 	{
 		private readonly TcpClient _client;
 
@@ -18,7 +18,7 @@ namespace Force.AthWebClient.TcpWrappers
 			_client = new TcpClient();
 		}
 
-		public void Connect(AthEndPoint endpoint, TimeSpan connectTimeout, TimeSpan sendTimeout, TimeSpan receiveTimeout)
+		public virtual void Connect(AthEndPoint endpoint, TimeSpan connectTimeout, TimeSpan sendTimeout, TimeSpan receiveTimeout)
 		{
 			CheckDisposed();
 
@@ -50,20 +50,19 @@ namespace Force.AthWebClient.TcpWrappers
 			_client.SendTimeout = (int)sendTimeout.TotalMilliseconds;
 			_client.ReceiveTimeout = (int)receiveTimeout.TotalMilliseconds;
 
-
 			if (!endpoint.IsHostIpAddress)
 				return Task.Factory.FromAsync(_client.BeginConnect, _client.EndConnect, endpoint.Host, endpoint.Port, null);
 			else
 				return Task.Factory.FromAsync(_client.BeginConnect, _client.EndConnect, endpoint.Address, endpoint.Port, null);
 		}
 
-		public Stream CreateStream(Func<Stream, Stream> wrapper)
+		public virtual Stream CreateStream(Func<Stream, Stream> wrapper)
 		{
 			CheckDisposed();
 			return _stream ?? (_stream = wrapper(_client.GetStream()));
 		}
 
-		public Stream GetStream()
+		public virtual Stream GetStream()
 		{
 			CheckDisposed();
 			return _stream;
@@ -75,7 +74,7 @@ namespace Force.AthWebClient.TcpWrappers
 				throw new ObjectDisposedException("TcpClient already disposed");
 		}
 
-		public void Release()
+		public virtual void Release()
 		{
 			if (_stream != null)
 				_stream.Close();
@@ -84,7 +83,12 @@ namespace Force.AthWebClient.TcpWrappers
 			_isClosed = true;
 		}
 
-		public void ErrorClose()
+		public virtual void ErrorClose()
+		{
+			Release();
+		}
+
+		void IDisposable.Dispose()
 		{
 			Release();
 		}

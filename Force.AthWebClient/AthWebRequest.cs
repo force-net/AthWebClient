@@ -37,7 +37,7 @@ namespace Force.AthWebClient
 			Http11
 		}
 
-		private readonly ITcpStreamWrapper _client;
+		private ITcpStreamWrapper _client;
 
 		private readonly AthEndPoint _connectEndPoint;
 
@@ -78,6 +78,8 @@ namespace Force.AthWebClient
 
 		public TimeSpan ReceiveTimeout { get; set; }
 
+		public ConnectionLimitPolicy LimitPolicy { get; set; }
+
 		public AthWebRequest(string url)
 			: this(AthEndPoint.FromUrl(url))
 		{
@@ -99,7 +101,7 @@ namespace Force.AthWebClient
 			Method = "GET";
 
 			_connectEndPoint = endPoint;
-			_client = new SimpleTcpStreamWrapper();
+			LimitPolicy = ConnectionLimitPolicy.CreateUnlimited();
 			if (_connectEndPoint.Scheme == AthEndPoint.SchemeType.Https) 
 				SslOptions = SslOptions.CreateDefault();
 		}
@@ -181,6 +183,9 @@ namespace Force.AthWebClient
 
 		private void DoConnect()
 		{
+			if (_client == null)
+				_client = TcpStreamFactory.Get(this);
+
 			if (_client.GetStream() != null)
 				ThrowError("Already connected");
 
@@ -190,6 +195,9 @@ namespace Force.AthWebClient
 
 		private Task DoConnectAsync()
 		{
+			if (_client == null)
+				_client = TcpStreamFactory.Get(this);
+
 			if (_client.GetStream() != null)
 				ThrowError("Already connected");
 
@@ -199,34 +207,33 @@ namespace Force.AthWebClient
 
 		private void WriteHeaders()
 		{
+			// NO Using or Close!! We use StreamWriter as simple wrapper for strings writing
+			var writer = new StreamWriter(_client.GetStream(), Encoding.ASCII, 65536);
+			var versionString = HttpVersion == HttpProtocolVersion.Http10 ? "1.0" : "1.1";
+			writer.WriteLine(
+				(Method ?? "GET").ToUpperInvariant() + " " + _connectEndPoint.GetPathAndQueryEscaped() + " " + "HTTP/"
+				+ versionString);
+			if (!_isHostSet)
+				writer.WriteLine(
+					"Host: " + _connectEndPoint.Host + (_connectEndPoint.IsDefaultPort ? string.Empty : ":" + _connectEndPoint.Port));
+			writer.WriteLine("Connection: close");
+			if (!_contentLengthSetByHeaders)
 			{
-				// NO Using or Close!! We use StreamWriter as simple wrapper for strings writing
-				var writer = new StreamWriter(_client.GetStream(), Encoding.ASCII, 65536);
-				var versionString = HttpVersion == HttpProtocolVersion.Http10 ? "1.0" : "1.1";
-				writer.WriteLine((Method ?? "GET").ToUpperInvariant() + " " + _connectEndPoint.GetPathAndQueryEscaped() + " " + "HTTP/" + versionString);
-				if (!_isHostSet)
-					writer.WriteLine("Host: " + _connectEndPoint.Host + (_connectEndPoint.IsDefaultPort ? string.Empty : ":" + _connectEndPoint.Port));
-				writer.WriteLine("Connection: close");
-				if (!_contentLengthSetByHeaders)
+				// manually add header
+				if (_contentLength.HasValue && _contentLength.Value >= 0) writer.WriteLine("Content-Length: " + _contentLength.Value.ToString(CultureInfo.InvariantCulture));
+				else
 				{
-					// manually add header
-					if (_contentLength.HasValue && _contentLength.Value >= 0)
-						writer.WriteLine("Content-Length: " + _contentLength.Value.ToString(CultureInfo.InvariantCulture));
-					else
-					{
-						if (!_contentLength.HasValue)
-							writer.WriteLine("Transfer-Encoding: chunked");
-					}
+					if (!_contentLength.HasValue) writer.WriteLine("Transfer-Encoding: chunked");
 				}
-
-				foreach (var header in _headers)
-				{
-					writer.WriteLine(header.Item1 + ": " + header.Item2);
-				}
-
-				writer.WriteLine();
-				writer.Flush();
 			}
+
+			foreach (var header in _headers)
+			{
+				writer.WriteLine(header.Item1 + ": " + header.Item2);
+			}
+
+			writer.WriteLine();
+			writer.Flush();
 		}
 
 		private WriteStubStream _requestStream;

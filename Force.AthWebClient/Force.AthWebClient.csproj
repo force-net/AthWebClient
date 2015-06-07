@@ -40,6 +40,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AthEndPoint.cs" />
+    <Compile Include="ConnectionLimitPolicy.cs" />
     <Compile Include="Ssl\AthExchangeAlgorithmType.cs" />
     <Compile Include="Ssl\AthHashAlgorithmType.cs" />
     <Compile Include="Ssl\AthSslProtocols.cs" />
@@ -55,6 +56,8 @@
     <Compile Include="AthWebResponse.cs" />
     <Compile Include="Streams\ResponseStream.cs" />
     <Compile Include="Stubs\WriteStubStream.cs" />
+    <Compile Include="TcpWrappers\LimitedTcpStreamWrapper.cs" />
+    <Compile Include="TcpWrappers\TcpStreamFactory.cs" />
     <Compile Include="TcpWrappers\ITcpStreamWrapper.cs" />
     <Compile Include="TcpWrappers\SimpleTcpStreamWrapper.cs" />
   </ItemGroup>

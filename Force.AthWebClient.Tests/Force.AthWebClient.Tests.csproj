@@ -42,7 +42,9 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ConnectionLimitRequestsTests.cs" />
     <Compile Include="InnerServerRequestsTests.cs" />
+    <Compile Include="MiniServer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SimpleRequestsTests.cs" />
     <None Include="packages.config" />

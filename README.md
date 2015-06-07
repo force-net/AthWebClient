@@ -28,10 +28,10 @@ Due this situation, I decide to realize own dumb Http Client with simple, but co
 * HTTPS support with security configuration and connection information
 * Support of automatic decompression of GZip/Defalte response (if requested)
 * Timeouts for Connect, Send, Receive
+* Limit request number to server
 
 ## TODO
 * KeepAlive suport
-* Limit request number to server
 * Proxy support (with autentication)
 * Authentication support
 * Timeouts configuration (better support)
