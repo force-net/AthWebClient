@@ -28,13 +28,11 @@ namespace Force.AthWebClient
 			return new ConnectionLimitPolicy(hostLimit, totalLimit);
 		}
 
-		private readonly Dictionary<string, int> _hostRequests = new Dictionary<string, int>();
+		private readonly Dictionary<AthEndPoint, int> _hostRequests = new Dictionary<AthEndPoint, int>();
 
 		private int _totalRequests;
 
-		private readonly AutoResetEvent _evt = new AutoResetEvent(false);
-
-		internal void GetNewSlot(string host)
+		internal void GetNewSlot(AthEndPoint host)
 		{
 			while (true)
 			{
@@ -67,22 +65,22 @@ namespace Force.AthWebClient
 							return;
 						}
 					}
-				}
 
-				_evt.WaitOne();
+					Monitor.Wait(_hostRequests);
+				}
 			}
 		}
 
-		internal void ReleaseSlot(string host)
+		internal void ReleaseSlot(AthEndPoint host)
 		{
 			lock (_hostRequests)
 			{
+				Console.WriteLine("Y " + host);
 				_totalRequests--;
 				int value;
 				if (_hostRequests.TryGetValue(host, out value)) _hostRequests[host] = value - 1;
+				Monitor.PulseAll(_hostRequests);
 			}
-
-			_evt.Set();
 		}
 	}
 }

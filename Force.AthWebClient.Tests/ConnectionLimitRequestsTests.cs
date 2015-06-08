@@ -62,5 +62,60 @@ namespace Force.AthWebClient.Tests
 				Assert.That(maxCount, Is.EqualTo(checkCount));
 			}
 		}
+
+		[Test]
+		public void HostRequestLimit_Should_Go_In_Correct_Order()
+		{
+			var requestsA = 0;
+			var requestsB = 0;
+			Action<HttpListenerContext> processActionA = context =>
+			{
+				requestsA++;
+				Thread.Sleep(300);
+				context.Response.StatusCode = 200;
+				context.Response.Close();
+			};
+
+			Action<HttpListenerContext> processActionB = context =>
+			{
+				requestsB++;
+				Thread.Sleep(100);
+				context.Response.StatusCode = 200;
+				context.Response.Close();
+			};
+
+			var connectionLimitPolicy = ConnectionLimitPolicy.Create(1);
+			using (StartServer(processActionA, SERVER_URL1))
+			using (StartServer(processActionB, SERVER_URL2))
+			{
+				var r1 = new AthWebRequest(SERVER_URL1);
+				var r2 = new AthWebRequest(SERVER_URL1);
+				var r3 = new AthWebRequest(SERVER_URL2);
+				var r4 = new AthWebRequest(SERVER_URL2);
+				r1.LimitPolicy = connectionLimitPolicy;
+				r2.LimitPolicy = connectionLimitPolicy;
+				r3.LimitPolicy = connectionLimitPolicy;
+				r4.LimitPolicy = connectionLimitPolicy;
+
+				var t1 = new Task(() => r1.GetResponse().GetResponseStream().Close());
+				var t2 = new Task(() => r2.GetResponse().GetResponseStream().Close()); // queued
+				var t3 = new Task(() => r3.GetResponse().GetResponseStream().Close());
+				var t4 = new Task(() => r4.GetResponse().GetResponseStream().Close()); // queued and completed
+				t1.Start();
+				t2.Start();
+				t3.Start();
+				t4.Start();
+				Task.WaitAll(t3, t4);
+
+				// fast requests completed before slow
+				Assert.That(requestsB, Is.EqualTo(2));
+				Assert.That(requestsA, Is.EqualTo(1));
+
+				Task.WaitAll(t1, t2);
+
+				// checking, that all requests is completed
+				Assert.That(requestsB + requestsA, Is.EqualTo(4));
+			}
+		}
 	}
 }

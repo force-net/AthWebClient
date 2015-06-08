@@ -6,7 +6,7 @@ namespace Force.AthWebClient.TcpWrappers
 	{
 		private readonly ConnectionLimitPolicy _policy;
 
-		private string _host;
+		private AthEndPoint _host;
 
 		internal LimitedTcpStreamWrapper(ConnectionLimitPolicy policy)
 		{
@@ -15,7 +15,7 @@ namespace Force.AthWebClient.TcpWrappers
 
 		public override void Connect(AthEndPoint endpoint, TimeSpan connectTimeout, TimeSpan sendTimeout, TimeSpan receiveTimeout)
 		{
-			_host = endpoint.Host;
+			_host = endpoint;
 			_policy.GetNewSlot(_host);
 			base.Connect(endpoint, connectTimeout, sendTimeout, receiveTimeout);
 		}
