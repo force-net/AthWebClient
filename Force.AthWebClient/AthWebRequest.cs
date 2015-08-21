@@ -17,7 +17,7 @@ using Force.AthWebClient.TcpWrappers;
 // proxy
 // https +
 // keep-alive
-// request limit
+// request limit +
 // chunked +
 // gzip +
 // timeouts
@@ -115,7 +115,7 @@ namespace Force.AthWebClient
 			if (headerName == "Content-Length")
 			{
 				if (_contentLengthSetByHeaders)
-					ThrowError("Content-Length already defined");
+					ThrowError("Content-Length is already defined");
 				_contentLengthSetByHeaders = true;
 				_contentLength = Convert.ToInt64(value);
 			}
@@ -123,7 +123,7 @@ namespace Force.AthWebClient
 			if (headerName == "Transfer-Encoding" && value == "chunked")
 			{
 				if (_contentLengthSetByHeaders)
-					ThrowError("Content-Length already defined");
+					ThrowError("Content-Length is already defined");
 				_contentLengthSetByHeaders = true;
 				_contentLength = null;
 			}
