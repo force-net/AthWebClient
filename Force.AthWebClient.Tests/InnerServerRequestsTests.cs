@@ -43,6 +43,7 @@ namespace Force.AthWebClient.Tests
 			{
 				var r = new AthWebRequest(SERVER_URL);
 				r.Method = "POST";
+				r.AddHeader("Transfer-Encoding", "chunked");
 
 				var stream = r.GetRequestStream();
 				// chunked by default

@@ -75,7 +75,6 @@ namespace Force.AthWebClient
 		{
 			lock (_hostRequests)
 			{
-				Console.WriteLine("Y " + host);
 				_totalRequests--;
 				int value;
 				if (_hostRequests.TryGetValue(host, out value)) _hostRequests[host] = value - 1;

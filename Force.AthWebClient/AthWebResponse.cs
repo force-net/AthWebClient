@@ -22,6 +22,10 @@ namespace Force.AthWebClient
 
 		public int StatusCode { get; private set; }
 
+		public string StatusDescription { get; private set; }
+
+		public AthWebRequest.HttpProtocolVersion HttpVersion { get; private set; }
+
 		private bool _autoDecompressResponse;
 
 		public bool AutoDecompressResponse
@@ -93,13 +97,18 @@ namespace Force.AthWebClient
 			string line = r.Item2;
 			if (!line.StartsWith("HTTP/"))
 				ThrowError("Non-http response");
+			if (line[5] == '1' && line[6] == '.')
+				HttpVersion = line[7] == '0' ? AthWebRequest.HttpProtocolVersion.Http10 : AthWebRequest.HttpProtocolVersion.Http11;
+			else
+				ThrowError("Unsupported http protocol version");
 
 			var idxSp1 = line.IndexOf(' ');
 			if (idxSp1 < 0)
 				ThrowError("Incorrect http answer");
 
 			var b = new StringBuilder();
-			for (var i = idxSp1 + 1; i < line.Length; i++)
+			var i = idxSp1 + 1;
+			for (; i < line.Length; i++)
 			{
 				if (line[i] >= '0' && line[i] < (byte)'9')
 					b.Append(line[i]);
@@ -112,6 +121,11 @@ namespace Force.AthWebClient
 
 			// ok, we already have 3 digits
 			StatusCode = Convert.ToInt32(b.ToString());
+
+			if (line.Length > i + 1)
+				StatusDescription = line.Remove(0, i + 1);
+			else
+				StatusDescription = string.Empty;
 		}
 
 		private void ReadHeadersInternal()

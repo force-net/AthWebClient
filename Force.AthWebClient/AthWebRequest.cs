@@ -240,8 +240,9 @@ namespace Force.AthWebClient
 
 		private Stream CreateRequestStreamInternal()
 		{
+			// servers dont likes chunked requests, better to use usual, if not specified chunked by header
 			if (_contentLength == null)
-				return _requestStream = new ChunkedRequestStream(_client.GetStream());
+				return _requestStream = new ChunkedRequestStream(_client.GetStream(), !_contentLengthSetByHeaders);
 			else
 				return _requestStream = new RequestStream(_client, _client.GetStream(), _contentLength);
 		}

@@ -35,6 +35,7 @@ namespace Force.AthWebClient.Tests
 			Action<HttpListenerContext> processAction = context =>
 				{
 					activeCount++;
+					Console.WriteLine(activeCount);
 					Thread.Sleep(300);
 					maxCount = Math.Max(maxCount, activeCount);
 					activeCount--;
@@ -46,6 +47,7 @@ namespace Force.AthWebClient.Tests
 			using (StartServer(processAction, SERVER_URL1))
 			using (StartServer(processAction, SERVER_URL2))
 			{
+				var evt = new ManualResetEvent(false);
 				var requests = new AthWebRequest[requestCount];
 				var tasks = new Task[requestCount];
 				for (int i = 0; i < requests.Length; i++)
@@ -53,10 +55,11 @@ namespace Force.AthWebClient.Tests
 					var hostName = hostNames == null ? SERVER_URL1 : hostNames[i % hostNames.Length];
 					var r = requests[i] = new AthWebRequest(hostName);
 					r.LimitPolicy = connectionLimitPolicy;
-					tasks[i] = new Task(() => r.GetResponse().GetResponseStream().Close());
+					tasks[i] = new Task(() => { Console.WriteLine(DateTime.Now.Millisecond); evt.WaitOne(); r.GetResponse().GetResponseStream().Close(); });
 					tasks[i].Start();
 				}
 
+				evt.Set();
 				Task.WaitAll(tasks);
 
 				Assert.That(maxCount, Is.EqualTo(checkCount));
@@ -97,14 +100,27 @@ namespace Force.AthWebClient.Tests
 				r3.LimitPolicy = connectionLimitPolicy;
 				r4.LimitPolicy = connectionLimitPolicy;
 
-				var t1 = new Task(() => r1.GetResponse().GetResponseStream().Close());
-				var t2 = new Task(() => r2.GetResponse().GetResponseStream().Close()); // queued
-				var t3 = new Task(() => r3.GetResponse().GetResponseStream().Close());
-				var t4 = new Task(() => r4.GetResponse().GetResponseStream().Close()); // queued and completed
+				var evt = new ManualResetEvent(false);
+				var evt2 = new ManualResetEvent(false);
+
+				var totalCount = 4;
+
+				Action doSleep = () =>
+					{
+						if (Interlocked.Decrement(ref totalCount) == 0) evt2.Set();
+						evt.WaitOne();
+					};
+
+				var t1 = new Task(() => { doSleep(); r1.GetResponse().GetResponseStream().Close(); });
+				var t2 = new Task(() => { doSleep(); r2.GetResponse().GetResponseStream().Close(); }); // queued
+				var t3 = new Task(() => { doSleep(); r3.GetResponse().GetResponseStream().Close(); });
+				var t4 = new Task(() => { doSleep(); r4.GetResponse().GetResponseStream().Close(); }); // queued and completed
 				t1.Start();
 				t2.Start();
 				t3.Start();
 				t4.Start();
+				evt2.WaitOne();
+				evt.Set();
 				Task.WaitAll(t3, t4);
 
 				// fast requests completed before slow

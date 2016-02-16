@@ -21,9 +21,12 @@ namespace Force.AthWebClient.Streams
 
 		private int _bufferLength;
 
-		public ChunkedRequestStream(Stream innerStream)
+		private bool _doNothingOnEmpty;
+
+		public ChunkedRequestStream(Stream innerStream, bool doNothingOnEmpty)
 		{
 			_innerStream = innerStream;
+			_doNothingOnEmpty = doNothingOnEmpty;
 		}
 
 		public override void Flush()
@@ -53,8 +56,11 @@ namespace Force.AthWebClient.Streams
 
 		public override void Write(byte[] buffer, int offset, int count)
 		{
+			if (_isClosed)
+				throw new ObjectDisposedException("Stream already closed");
 			if (count == 0)
 				return;
+			_doNothingOnEmpty = false;
 			while (true)
 			{
 				var cnt = Math.Min(MAX_BUFFER_LENGTH - _bufferLength, count);
@@ -76,16 +82,33 @@ namespace Force.AthWebClient.Streams
 			return Task.Factory.StartNew(() => Write(buffer, offset, count), cancellationToken);
 		}
 
+		private bool _isClosed;
+
 		public override void Close()
 		{
+			if (_isClosed)
+				return;
+			// empty stream without data. do not write final empty block
+			if (_doNothingOnEmpty)
+				return;
 			WriteBlock();
 			WriteFinalBlock();
 			Flush();
+			_isClosed = true;
+
 			// dont close here
 		}
 
 		public override Task CloseAsync()
 		{
+			if (_isClosed)
+			{
+				var t = new Task(() => { });
+				t.Start();
+				return t;
+			}
+
+			_isClosed = true;
 			return WriteBlockAsync()
 				.ContinueWith(_ => WriteFinalBlockAsync())
 				.ContinueWith(_ => FlushAsync(new CancellationToken()));

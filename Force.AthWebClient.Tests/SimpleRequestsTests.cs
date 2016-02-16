@@ -10,9 +10,9 @@ namespace Force.AthWebClient.Tests
 	public class SimpleRequestsTests
 	{
 		[Test]
-		public void Yandex_Request_Should_Return_Ok()
+		public void Lenta_Request_Should_Return_Ok()
 		{
-			var r = new AthWebRequest("http://ya.ru/");
+			var r = new AthWebRequest("https://lenta.ru/");
 			r.Method = "GET";
 			// r.ContentLength = 0;
 			var response = r.GetResponse();
@@ -29,6 +29,22 @@ namespace Force.AthWebClient.Tests
 
 			var answer = new StreamReader(response.GetResponseStream()).ReadToEnd();
 			// Console.WriteLine(answer);
+			Assert.That(answer, Is.StringStarting("<!DOCTYPE html>"));
+		}
+
+		[Test, Ignore("Manual")]
+		public void Localhost_Request_Should_Return_Ok()
+		{
+			var r = new AthWebRequest("http://localhost:8221/");
+			r.Method = "GET";
+			var rs = r.GetRequestStream();
+			rs.Close();
+			// r.ContentLength = 0;
+			var response = r.GetResponse();
+			Console.WriteLine(response.StatusCode);
+			Assert.That(response.StatusCode, Is.EqualTo(200));
+
+			var answer = new StreamReader(response.GetResponseStream()).ReadToEnd();
 			Assert.That(answer, Is.StringStarting("<!DOCTYPE html>"));
 		}
 
@@ -80,8 +96,9 @@ namespace Force.AthWebClient.Tests
 			Console.WriteLine(response.StatusCode);
 			Assert.That(response.StatusCode, Is.EqualTo(200).Or.EqualTo(302));
 
-			var server = response.Headers.First(x => x.Item1 == "Server").Item2;
-			Assert.That(server, Is.EqualTo("GFE/2.0"));
+			// invalid now
+			/*var server = response.Headers.First(x => x.Item1 == "Server").Item2;
+			Assert.That(server, Is.EqualTo("GFE/2.0"));*/
 
 			var answer = new StreamReader(response.GetResponseStream()).ReadToEnd();
 			// Console.WriteLine(answer);
